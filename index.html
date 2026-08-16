@@ -1555,9 +1555,15 @@ body.oc2-mode{background:#f5f6f8;}
   <!-- ===== CATEGORY LANDING ===== -->
   <section class="section" id="categoryLanding">
     <div class="cat-landing">
-      <div class="cat-landing-head">
+      <div class="cat-landing-head" style="position:relative;">
+        <button type="button" id="btnRelock" title="열람 비밀번호 화면으로 돌아가기"
+          style="position:absolute;top:0;right:0;background:transparent;border:1px solid #2c313c;
+            color:#8a919e;font-size:11.5px;padding:6px 12px;border-radius:8px;cursor:pointer;">
+          🔒 다시 잠그기
+        </button>
         <div class="cat-landing-title">JLR Korea <span class="accent">Analytics</span></div>
         <div class="cat-landing-sub">카테고리를 선택하세요</div>
+        <div id="lockModeBadge" style="margin-top:8px;font-size:11px;color:#6b7280;"></div>
       </div>
       <div class="cat-grid">
         <button type="button" class="cat-card" id="cat-pa">
@@ -11672,18 +11678,24 @@ const audatex = (()=>{
     if(ls) ls.remove();
   }
   function applyViewerRestrictions(){
-    // P&A: 임포트/저장 관련 UI 전부 숨김
-    ['#btn-import-src','#btn-pa-sync-settings','#btn-pa-sync-save','#uploadStage']
+    // P&A: 임포트/저장/불러오기 관련 UI 전부 숨김.
+    // 뷰어는 잠금 해제 시점에 이미 최신 저장본을 자동으로 불러왔으므로
+    // '불러오기' 버튼 자체가 필요 없다 (수동으로 다시 누를 이유가 없음).
+    ['#btn-import-src','#btn-pa-sync-settings','#btn-pa-sync-save',
+     '#btn-pa-sync-load','#btn-pa-sync-load-upload','#btn-close-upload']
       .forEach(sel=>{ const el=document.querySelector(sel); if(el) el.style.display='none'; });
-    // One Care: 임포트바/저장/설정 숨김
+    // One Care: 임포트바/저장/설정/불러오기 숨김 (같은 이유)
     const hideOc = ()=>{
-      ['importBar','btnOcSyncSettings','btnOcSyncSave']
+      ['importBar','btnOcSyncSettings','btnOcSyncSave','btnOcSyncLoad']
         .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     };
     hideOc();
     // One Care 섹션은 나중에 렌더되므로 관찰해서 한 번 더 적용
     const mo = new MutationObserver(hideOc);
     mo.observe(document.body, { childList:true, subtree:true });
+    // Data Management는 관리자 전용 도구 — 뷰어에게는 카드 자체를 숨긴다
+    const dm = document.getElementById('cat-datamanagement');
+    if (dm) dm.style.display = 'none';
   }
   async function tryDecryptBoth(pass){
     const results = { pa:false, onecare:false, paLive:false };
@@ -11740,6 +11752,7 @@ const audatex = (()=>{
     try{ sessionStorage.setItem(LOCK_OK_KEY,'1'); sessionStorage.setItem(MODE_KEY,'viewer'); }catch(e){}
     window.__lockMode = 'viewer';
     applyViewerRestrictions();
+    { const b=document.getElementById('lockModeBadge'); if(b) b.textContent='👁 뷰어 모드'; }
     hideLock();
     window.__paHasLiveSnapshot = r.paLive;
   }
@@ -11756,6 +11769,7 @@ const audatex = (()=>{
     }
     try{ sessionStorage.setItem(LOCK_OK_KEY,'1'); sessionStorage.setItem(MODE_KEY,'admin'); }catch(e){}
     window.__lockMode = 'admin';
+    { const b=document.getElementById('lockModeBadge'); if(b) b.textContent='🔑 관리자 모드'; }
     hideLock();
   }
 
@@ -11774,12 +11788,27 @@ const audatex = (()=>{
     });
     if(adminEnterBtn) adminEnterBtn.addEventListener('click', doAdminUnlock);
 
+    // 재잠그기: 세션의 토큰/비번/모드를 전부 지우고 잠금화면으로 새로고침
+    const relockBtn = document.getElementById('btnRelock');
+    if(relockBtn) relockBtn.addEventListener('click', ()=>{
+      if(!confirm('다시 잠그시겠습니까? 열람 비밀번호(또는 관리자 토큰)를 다시 입력해야 합니다.')) return;
+      try{
+        sessionStorage.removeItem(LOCK_OK_KEY);
+        sessionStorage.removeItem(MODE_KEY);
+        sessionStorage.removeItem('GH_LIVE_PASS');
+        localStorage.removeItem('GH_LIVE_TOKEN');
+      }catch(e){}
+      location.reload();
+    });
+
     // 같은 세션에서 이미 통과했으면 바로 진입 (탭 유지 중 재방문 등)
     try{
       if(sessionStorage.getItem(LOCK_OK_KEY)==='1'){
         hideLock();
         window.__lockMode = sessionStorage.getItem(MODE_KEY);
         if(window.__lockMode==='viewer') applyViewerRestrictions();
+        const badge = document.getElementById('lockModeBadge');
+        if(badge) badge.textContent = window.__lockMode==='admin' ? '🔑 관리자 모드' : '👁 뷰어 모드';
       }
     }catch(e){}
   }
