@@ -1676,7 +1676,8 @@ body.oc2-mode{background:#0a0c10;}
       </div>
       <div class="main-tabs-actions">
         <span class="section-meta" id="paSyncStatus" style="margin-right:6px;"></span>
-        <button class="btn btn-sm" id="btn-pa-sync-settings" title="GitHub 토큰 설정">⚙</button>
+        <button type="button" id="btn-pa-sync-settings" class="btn btn-sm" title="GitHub 토큰 설정">⚙</button>
+        <button class="btn btn-sm" id="btn-pa-sync-passchange" title="열람 비밀번호 변경">🔑 비번변경</button>
         <button class="btn btn-sm" id="btn-pa-sync-load">☁ 불러오기</button>
         <button class="btn btn-sm" id="btn-pa-sync-save">☁ 저장</button>
         <button class="btn btn-sm" id="btn-import-src">📁 소스 가져오기</button>
@@ -2104,6 +2105,16 @@ function ghGetToken(){ try{ return localStorage.getItem(GH_TOKEN_KEY)||''; }catc
 function ghSetToken(t){ try{ localStorage.setItem(GH_TOKEN_KEY, t); }catch(e){} }
 function ghGetPass(){ try{ return sessionStorage.getItem(GH_PASS_KEY)||''; }catch(e){ return ''; } }
 function ghSetPass(p){ try{ sessionStorage.setItem(GH_PASS_KEY, p); }catch(e){} }
+function ghChangePassPrompt(){
+  const cur = ghGetPass();
+  const msg = cur
+    ? '새 열람 비밀번호를 입력하세요 (다음 "☁ 저장" 시점부터 적용됩니다):'
+    : '열람 비밀번호를 정하세요 (다음 "☁ 저장" 시점부터 적용됩니다):';
+  const p = prompt(msg, '');
+  if(!p) return;
+  ghSetPass(p);
+  alert('변경되었습니다. 지금부터 "☁ 저장"을 누르면 이 비밀번호로 암호화됩니다.\n뷰어들에게 새 비밀번호를 알려주세요 — 안 알려주면 최신 데이터를 못 엽니다.');
+}
 
 /* ---- base64 (대용량 안전, call stack 초과 방지) ---- */
 function u8ToB64(u8){
@@ -2184,7 +2195,7 @@ async function ghSaveSnapshot(kind, obj, statusCb){
     // 이력용 타임스탬프 스냅샷도 별도 보관 (덮어쓰지 않음 → 버전 기록)
     const ts = new Date().toISOString().replace(/[:.]/g,'-');
     await ghPutFile(`data/${kind}/history/${ts}.enc.json`, envelope, `${kind} 이력 ${ts}`);
-    statusCb && statusCb('✓ 서버 저장 완료 ('+new Date().toLocaleTimeString('ko-KR')+') — 다른 사람 화면엔 1~2분 후 반영됩니다', 'ok');
+    statusCb && statusCb('✓ 서버 저장 완료 ('+new Date().toLocaleTimeString('ko-KR')+') — 다른 사람 화면엔 최대 5분 정도 걸려 반영됩니다', 'ok');
     return true;
   }catch(e){
     statusCb && statusCb('저장 실패: '+e.message, 'err');
@@ -4607,6 +4618,8 @@ function setupTabs() {
     if(t===null)return;
     if(t && !t.startsWith('(설정됨')) ghSetToken(t.trim());
   });
+  const btnPaPass = document.getElementById('btn-pa-sync-passchange');
+  if (btnPaPass) btnPaPass.addEventListener('click', ghChangePassPrompt);
   const btnPaSave = document.getElementById('btn-pa-sync-save');
   if (btnPaSave) btnPaSave.addEventListener('click', async ()=>{
     const snap = buildPASnapshotObject();
@@ -8914,6 +8927,7 @@ SPNV_ROOT.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{SPNV_ROOT.querySele
     <span class="sec-meta" id="dataStamp"></span>
     <span class="sec-meta" id="ocSyncStatus" style="min-width:0;"></span>
     <button class="btn sm" id="btnOcSyncSettings" title="GitHub 토큰 설정">⚙</button>
+    <button class="btn sm" id="btnOcSyncPassChange" title="열람 비밀번호 변경">🔑 비번변경</button>
     <button class="btn sm" id="btnOcSyncLoad">☁ 불러오기</button>
     <button class="btn sm" id="btnOcSyncSave">☁ 저장</button>
     <button class="btn sm" id="btnExportWs">📄 워크샵 리포트</button>
@@ -10780,6 +10794,7 @@ onEl('btnOcSyncSettings','click',()=>{
   if(t===null)return;
   if(t && !t.startsWith('(설정됨')) ghSetToken(t.trim());
 });
+onEl('btnOcSyncPassChange','click', ghChangePassPrompt);
 onEl('btnOcSyncSave','click', async ()=>{
   ocSyncSetStatus('저장 준비 중...','info');
   await ghSaveSnapshot('onecare', DATA, ocSyncSetStatus);
@@ -11836,6 +11851,16 @@ const audatex = (()=>{
         if(window.__lockMode==='viewer') applyViewerRestrictions();
         const badge = document.getElementById('lockModeBadge');
         if(badge) badge.textContent = window.__lockMode==='admin' ? '🔑 관리자 모드' : '👁 뷰어 모드';
+      }
+    }catch(e){}
+
+    // 이 브라우저에 저장된 토큰이 있으면(예: 지난번 관리자 로그인) 관리자 패널을 미리 펴고
+    // 토큰 입력칸을 채워둔다 — 다시 붙여넣지 않고 버튼 한 번만 누르면 되도록.
+    try{
+      const savedToken = ghGetToken();
+      if(savedToken && adminPanel && document.getElementById('lockTokenInput')){
+        document.getElementById('lockTokenInput').value = savedToken;
+        adminPanel.style.display = 'block';
       }
     }catch(e){}
   }
