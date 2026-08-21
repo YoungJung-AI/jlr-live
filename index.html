@@ -6705,6 +6705,13 @@ function revealPADashboardAndRender(){
   const elapsed = APP.data.workingDayCount, totalWD = APP.data.totalWorkingDays;
   const meta = document.getElementById('summaryMeta');
   if (meta) meta.textContent = `${APP.data.reportMonth} ${reportYear} · ${elapsed} of ${totalWD} working days elapsed`;
+  // 상단 topbar-meta(Report Date / Working Day / Progress) — 로컬 임포트 빌드 흐름에선
+  // buildDashboard()가 채우는데, 서버에서 불러온 스냅샷 경로는 이 세 값을 놓치고 있었다.
+  if (APP.data.reportDate) {
+    const _rd = document.getElementById('reportDate'); if(_rd) _rd.textContent = localDateKey(APP.data.reportDate);
+    const _wd = document.getElementById('workingDay'); if(_wd) _wd.textContent = `Day ${elapsed} of ${totalWD}`;
+    const _mp = document.getElementById('monthProgress'); if(_mp) _mp.textContent = totalWD ? (elapsed / totalWD * 100).toFixed(0) + '%' : '—';
+  }
   document.getElementById('dashboard').classList.remove('hidden');
   const _us=document.getElementById('uploadStage'); if(_us)_us.classList.add('hidden');
   const _cl=document.getElementById('categoryLanding'); if(_cl)_cl.classList.add('hidden');
@@ -8783,6 +8790,15 @@ SPNV_ROOT.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{SPNV_ROOT.querySele
 
   window.SPNV = { render: renderDashboard, compute: compute };
   window.SPNV_removeComp = removeComp;
+  /* 서버 동기화(잠금화면 언락)에서 HISTORICAL/WORKSHOP_SPNV_DATA/RETAILER_H를
+     복원할 수 있도록 세터를 노출. 이 세 변수는 이 IIFE 안에서만 보이는
+     스코프라 바깥(lock_logic.js)에서 직접 대입이 불가능했다(ReferenceError). */
+  window.__setSpnvHardcoded = function(bundle){
+    if (!bundle) return;
+    if (bundle.HISTORICAL) HISTORICAL = bundle.HISTORICAL;
+    if (bundle.WORKSHOP_SPNV_DATA) WORKSHOP_SPNV_DATA = bundle.WORKSHOP_SPNV_DATA;
+    if (bundle.RETAILER_H) RETAILER_H = bundle.RETAILER_H;
+  };
   try { renderVehGrid(); renderKitDef(); setupWorkshopSpnvToggle(); } catch(e){ console.warn('SPNV init', e); }
 })();
 
@@ -11739,8 +11755,11 @@ const audatex = (()=>{
         KEY_ACC_MAY_ACTUALS_BY_PART = bundle.KEY_ACC_MAY_ACTUALS_BY_PART;
         KEY_ACC_JUN_ACTUALS_BY_PART = bundle.KEY_ACC_JUN_ACTUALS_BY_PART;
         KEY_ACC_JUL_ACTUALS_BY_PART = bundle.KEY_ACC_JUL_ACTUALS_BY_PART;
-        HISTORICAL = bundle.HISTORICAL; WORKSHOP_SPNV_DATA = bundle.WORKSHOP_SPNV_DATA;
-        RETAILER_H = bundle.RETAILER_H;
+      }
+      // HISTORICAL/WORKSHOP_SPNV_DATA/RETAILER_H는 SPNV 모듈 내부 스코프라
+      // 직접 대입 불가 — 노출된 세터를 통해서만 복원 가능.
+      if (typeof window.__setSpnvHardcoded === 'function') {
+        window.__setSpnvHardcoded(bundle);
       }
       results.pa = true;
     }catch(e){ /* 데이터 없음 또는 비번 오류 — 아래서 판정 */ }
