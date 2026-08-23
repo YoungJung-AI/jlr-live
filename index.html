@@ -6855,6 +6855,24 @@ function distributeHtml() {
   }
   logMsg('Packaging distribution HTML...', 'ok');
   const snapshot = buildPASnapshotObject();
+  // 예산/마감월 실적/SPNV 상수는 원래 코드에 하드코딩돼 있었지만, 보안 작업 때
+  // 서버(암호화 파일)로 옮겨졌다. 배포본은 오프라인 단독 파일이라 서버를 못 읽으므로
+  // 현재 메모리에 복원돼 있는 값을 스냅샷에 함께 담아야 예산 대비 차트/Pace가 나온다.
+  snapshot.__hardcoded = (function(){
+    const out = {};
+    try{ out.APR_ACTUAL_RAW = APR_ACTUAL_RAW; }catch(e){}
+    try{ out.MAY_ACTUAL_RAW = MAY_ACTUAL_RAW; }catch(e){}
+    try{ out.JUN_ACTUAL_RAW = JUN_ACTUAL_RAW; }catch(e){}
+    try{ out.JUL_ACTUAL_RAW = JUL_ACTUAL_RAW; }catch(e){}
+    try{ out.MARKET_BUDGET_RAW = MARKET_BUDGET_RAW; }catch(e){}
+    try{ out.BUDGET_RAW = BUDGET_RAW; }catch(e){}
+    try{ out.KEY_ACC_APR_ACTUALS_BY_PART = KEY_ACC_APR_ACTUALS_BY_PART; }catch(e){}
+    try{ out.KEY_ACC_MAY_ACTUALS_BY_PART = KEY_ACC_MAY_ACTUALS_BY_PART; }catch(e){}
+    try{ out.KEY_ACC_JUN_ACTUALS_BY_PART = KEY_ACC_JUN_ACTUALS_BY_PART; }catch(e){}
+    try{ out.KEY_ACC_JUL_ACTUALS_BY_PART = KEY_ACC_JUL_ACTUALS_BY_PART; }catch(e){}
+    try{ if (typeof window.__getSpnvHardcoded === 'function') Object.assign(out, window.__getSpnvHardcoded()); }catch(e){}
+    return out;
+  })();
   const snapshotJson = JSON.stringify(snapshot);
 
 
@@ -6914,6 +6932,30 @@ function distributeHtml() {
     });
     APP.data.ciIndex = new Map(snap.ciIndex || []);
     APP.data.masterMap = new Map(snap.masterEntries || []);
+
+    // ===== 1-b. 예산/마감월/SPNV 하드코딩 상수 복원 =====
+    // 이 값들은 원래 코드에 박혀 있었으나 서버(암호화)로 옮겨졌다. 배포본은
+    // 오프라인 단독 파일이라 서버를 못 읽으므로, 생성 시점에 스냅샷에 담아둔
+    // 값을 여기서 되살린다. 이게 없으면 예산 대비 달성률 차트와 vs Pace가 비어버린다.
+    if (snap.__hardcoded) {
+      var HC = snap.__hardcoded;
+      try{
+        if (typeof APR_ACTUAL_RAW !== 'undefined') {
+          if (HC.APR_ACTUAL_RAW) APR_ACTUAL_RAW = HC.APR_ACTUAL_RAW;
+          if (HC.MAY_ACTUAL_RAW) MAY_ACTUAL_RAW = HC.MAY_ACTUAL_RAW;
+          if (HC.JUN_ACTUAL_RAW) JUN_ACTUAL_RAW = HC.JUN_ACTUAL_RAW;
+          if (HC.JUL_ACTUAL_RAW) JUL_ACTUAL_RAW = HC.JUL_ACTUAL_RAW;
+          if (HC.MARKET_BUDGET_RAW) MARKET_BUDGET_RAW = HC.MARKET_BUDGET_RAW;
+          if (HC.BUDGET_RAW) BUDGET_RAW = HC.BUDGET_RAW;
+          if (HC.KEY_ACC_APR_ACTUALS_BY_PART) KEY_ACC_APR_ACTUALS_BY_PART = HC.KEY_ACC_APR_ACTUALS_BY_PART;
+          if (HC.KEY_ACC_MAY_ACTUALS_BY_PART) KEY_ACC_MAY_ACTUALS_BY_PART = HC.KEY_ACC_MAY_ACTUALS_BY_PART;
+          if (HC.KEY_ACC_JUN_ACTUALS_BY_PART) KEY_ACC_JUN_ACTUALS_BY_PART = HC.KEY_ACC_JUN_ACTUALS_BY_PART;
+          if (HC.KEY_ACC_JUL_ACTUALS_BY_PART) KEY_ACC_JUL_ACTUALS_BY_PART = HC.KEY_ACC_JUL_ACTUALS_BY_PART;
+        }
+      }catch(e){ console.warn('hardcoded restore', e); }
+      // SPNV 모듈은 별도 스코프라 세터를 통해서만 주입 가능
+      try{ if (typeof window.__setSpnvHardcoded === 'function') window.__setSpnvHardcoded(HC); }catch(e){}
+    }
 
     // ===== 2. Hide upload UI / log / Distribute button =====
     // Viewer mode philosophy: distributed file is a full-feature viewer.
@@ -8854,6 +8896,10 @@ SPNV_ROOT.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{SPNV_ROOT.querySele
     if (bundle.HISTORICAL) HISTORICAL = bundle.HISTORICAL;
     if (bundle.WORKSHOP_SPNV_DATA) WORKSHOP_SPNV_DATA = bundle.WORKSHOP_SPNV_DATA;
     if (bundle.RETAILER_H) RETAILER_H = bundle.RETAILER_H;
+  };
+  /* 배포본(Distribute HTML) 생성 시 현재 값을 꺼내 스냅샷에 담기 위한 getter */
+  window.__getSpnvHardcoded = function(){
+    return { HISTORICAL: HISTORICAL, WORKSHOP_SPNV_DATA: WORKSHOP_SPNV_DATA, RETAILER_H: RETAILER_H };
   };
   try { renderVehGrid(); renderKitDef(); setupWorkshopSpnvToggle(); } catch(e){ console.warn('SPNV init', e); }
 })();
